@@ -1,4 +1,4 @@
-# [YOUR_PROJECT_NAME] API
+# EcoAPI
 
 REST API for analyzing codebase API usage, estimating cost, detecting inefficiencies, and generating optimization suggestions.
 
@@ -9,28 +9,27 @@ Developers often ship API-heavy features without visibility into:
 - Redundant or cacheable request patterns
 - Rate-limit and N+1 hotspots
 
-`[YOUR_PROJECT_NAME]` turns parsed API call data into actionable diagnostics:
+EcoAPI turns parsed API call data into actionable diagnostics:
 - Cost analytics
 - Endpoint-level risk/status
 - Optimization suggestions with estimated savings
-- d3.js-ready graph data
+- D3.js-ready graph data
 
 ## Tech Stack
 
-- Node.js + Express
-- TypeScript (strict mode)
-- In-memory storage with repository-like service boundaries
-- UUID-based resource IDs
+- **Cloudflare Workers** — serverless runtime
+- **Hono** — web framework (Workers-compatible, Express-like)
+- **Cloudflare D1** — SQLite database (persistent)
+- **TypeScript** — strict mode
 
 ## Project Structure
 
-```txt
+```
 src/
-  app.ts
-  server.ts
-  seed.ts
+  index.ts              # Workers entry point (Hono app)
+  env.ts                # Shared Env/Variables/AppContext types
   config/
-    pricing.ts
+    pricing.ts          # Provider pricing & keyword detection
   middleware/
     cors.ts
     content-type.ts
@@ -38,33 +37,46 @@ src/
     request-id.ts
     error-handler.ts
   models/
-    types.ts
+    types.ts            # TypeScript domain types
   routes/
     health.ts
     projects.ts
     providers.ts
   services/
-    analysis-service.ts
-    project-service.ts
-    provider-service.ts
-    validation-service.ts
-  store/
-    data-store.ts
+    analysis-service.ts     # Core analysis engine (pure, sync)
+    project-service.ts      # All CRUD via D1 (async)
+    provider-service.ts     # Provider config lookups
+    validation-service.ts   # Input validation
   utils/
     app-error.ts
     pagination.ts
     sort.ts
+migrations/
+  0001_schema.sql       # D1 table definitions
+  0002_seed.sql         # Demo project seed data
 ```
 
 ## Setup
 
 ```bash
 npm install
-npm run dev
+npx wrangler d1 create eco-db          # create D1 database
+# paste the returned database_id into wrangler.toml
+npm run db:migrate:local                # apply schema + seed data
+npm run dev                             # start local dev server
 ```
 
-Server starts on `http://localhost:3000`.
-The app seeds one project + scan on startup for immediate exploration.
+The app seeds one project + scan via migration for immediate exploration.
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start local dev server (`wrangler dev`) |
+| `npm run deploy` | Deploy to Cloudflare Workers |
+| `npm run typecheck` | TypeScript type check |
+| `npm run db:migrate:local` | Apply D1 migrations locally |
+| `npm run db:migrate:remote` | Apply D1 migrations to production |
 
 ## Core Behavior
 
@@ -86,24 +98,29 @@ The app seeds one project + scan on startup for immediate exploration.
 
 ## Frequency Heuristics
 
-- `per-request` => 1000/day
-- `per-session` => 300/day
-- `hourly` => 24/day
-- `daily` => 1/day
-- `weekly` => 1/7 day
-- `N/day` => N/day
-- unknown => 100/day
+| Input | Calls/day |
+|-------|-----------|
+| `per-request` | 1000 |
+| `per-session` | 300 |
+| `hourly` | 24 |
+| `daily` | 1 |
+| `weekly` | 1/7 |
+| `N/day` | N |
+| unknown | 100 |
 
-## Pricing Table (Config)
+## Pricing Table
 
 Defined in `src/config/pricing.ts`:
-- Stripe: `0.01`
-- OpenAI: `0.006`
-- Twilio: `0.0075`
-- SendGrid: `0.001`
-- AWS S3: `0.0004`
-- Google Maps: `0.005`
-- Fallback/internal: `0.0001`
+
+| Provider | Cost per call (USD) |
+|----------|-------------------|
+| Stripe | $0.01 |
+| OpenAI | $0.006 |
+| Twilio | $0.0075 |
+| SendGrid | $0.001 |
+| AWS S3 | $0.0004 |
+| Google Maps | $0.005 |
+| Internal/fallback | $0.0001 |
 
 ## Example Scan Payload
 
@@ -124,247 +141,74 @@ Defined in `src/config/pricing.ts`:
 
 ## API Reference
 
-Base URL:
-
-```bash
-http://localhost:3000
-```
-
 ### Health
 
-#### GET /health
-Success:
-```bash
-curl -s http://localhost:3000/health
 ```
-Error:
-```bash
-curl -s http://localhost:3000/healthz
+GET /health
 ```
 
 ### Projects
 
-#### POST /projects
-Success:
-```bash
-curl -s -X POST http://localhost:3000/projects \
-  -H "Content-Type: application/json" \
-  -d "{\"name\":\"my-app\",\"description\":\"checkout service\",\"apiCalls\":[]}"
 ```
-Error:
-```bash
-curl -s -X POST http://localhost:3000/projects \
-  -H "Content-Type: application/json" \
-  -d "{\"description\":\"missing name\"}"
-```
-
-#### GET /projects?page=1&limit=20&name=my-app&sort=created_at&order=desc
-Success:
-```bash
-curl -s "http://localhost:3000/projects?page=1&limit=20&sort=created_at&order=desc"
-```
-Error:
-```bash
-curl -s "http://localhost:3000/projects?page=0&limit=500&sort=bad_field"
-```
-
-#### GET /projects/:id
-Success:
-```bash
-curl -s http://localhost:3000/projects/{projectId}
-```
-Error:
-```bash
-curl -s http://localhost:3000/projects/not-a-real-id
-```
-
-#### PATCH /projects/:id
-Success:
-```bash
-curl -s -X PATCH http://localhost:3000/projects/{projectId} \
-  -H "Content-Type: application/json" \
-  -d "{\"name\":\"renamed-app\"}"
-```
-Error:
-```bash
-curl -s -X PATCH http://localhost:3000/projects/{projectId} \
-  -H "Content-Type: application/json" \
-  -d "{}"
-```
-
-#### DELETE /projects/:id
-Success:
-```bash
-curl -i -X DELETE http://localhost:3000/projects/{projectId}
-```
-Error:
-```bash
-curl -i -X DELETE http://localhost:3000/projects/not-a-real-id
+POST   /projects
+GET    /projects?page=1&limit=20&name=my-app&sort=created_at&order=desc
+GET    /projects/:id
+PATCH  /projects/:id
+DELETE /projects/:id
 ```
 
 ### Scans
 
-#### POST /projects/:id/scans
-Success:
-```bash
-curl -s -X POST http://localhost:3000/projects/{projectId}/scans \
-  -H "Content-Type: application/json" \
-  -d "{\"apiCalls\":[{\"file\":\"src/a.ts\",\"line\":10,\"method\":\"GET\",\"url\":\"/api/users/:id\",\"library\":\"axios\",\"frequency\":\"per-request\"}]}"
 ```
-Error:
-```bash
-curl -s -X POST http://localhost:3000/projects/{projectId}/scans \
-  -H "Content-Type: application/json" \
-  -d "{\"apiCalls\":\"not-an-array\"}"
-```
-
-#### GET /projects/:id/scans
-Success:
-```bash
-curl -s "http://localhost:3000/projects/{projectId}/scans?page=1&limit=20&sort=created_at&order=desc"
-```
-Error:
-```bash
-curl -s "http://localhost:3000/projects/{projectId}/scans?sort=updated_at"
-```
-
-#### GET /projects/:id/scans/:scanId
-Success:
-```bash
-curl -s http://localhost:3000/projects/{projectId}/scans/{scanId}
-```
-Error:
-```bash
-curl -s http://localhost:3000/projects/{projectId}/scans/not-a-real-scan
-```
-
-#### GET /projects/:id/scans/latest
-Success:
-```bash
-curl -s http://localhost:3000/projects/{projectId}/scans/latest
-```
-Error:
-```bash
-curl -s http://localhost:3000/projects/not-a-real-id/scans/latest
+POST   /projects/:id/scans
+GET    /projects/:id/scans?page=1&limit=20&sort=created_at&order=desc
+GET    /projects/:id/scans/latest
+GET    /projects/:id/scans/:scanId
 ```
 
 ### Endpoints
 
-#### GET /projects/:id/endpoints
-Success:
-```bash
-curl -s "http://localhost:3000/projects/{projectId}/endpoints?provider=stripe&status=cacheable&method=GET&sort=monthly_cost&order=desc&page=1&limit=20"
 ```
-Error:
-```bash
-curl -s "http://localhost:3000/projects/{projectId}/endpoints?sort=created_at"
-```
-
-#### GET /projects/:id/endpoints/:endpointId
-Success:
-```bash
-curl -s http://localhost:3000/projects/{projectId}/endpoints/{endpointId}
-```
-Error:
-```bash
-curl -s http://localhost:3000/projects/{projectId}/endpoints/not-a-real-endpoint
+GET    /projects/:id/endpoints?provider=stripe&status=cacheable&method=GET&sort=monthly_cost&order=desc
+GET    /projects/:id/endpoints/:endpointId
 ```
 
 ### Suggestions
 
-#### GET /projects/:id/suggestions
-Success:
-```bash
-curl -s "http://localhost:3000/projects/{projectId}/suggestions?type=cache,batch,redundancy&severity=high&sort=estimated_savings&order=desc&page=1&limit=20"
 ```
-Error:
-```bash
-curl -s "http://localhost:3000/projects/{projectId}/suggestions?sort=monthly_cost"
-```
-
-#### GET /projects/:id/suggestions/:suggestionId
-Success:
-```bash
-curl -s http://localhost:3000/projects/{projectId}/suggestions/{suggestionId}
-```
-Error:
-```bash
-curl -s http://localhost:3000/projects/{projectId}/suggestions/not-a-real-suggestion
+GET    /projects/:id/suggestions?type=cache,batch&severity=high&sort=estimated_savings&order=desc
+GET    /projects/:id/suggestions/:suggestionId
 ```
 
 ### Graph
 
-#### GET /projects/:id/graph
-Success:
-```bash
-curl -s "http://localhost:3000/projects/{projectId}/graph?cluster_by=provider"
 ```
-Error:
-```bash
-curl -s "http://localhost:3000/projects/{projectId}/graph?cluster_by=invalid"
+GET    /projects/:id/graph?cluster_by=provider|file|cost
 ```
 
-### Cost
+### Cost Analytics
 
-#### GET /projects/:id/cost
-Success:
-```bash
-curl -s http://localhost:3000/projects/{projectId}/cost
 ```
-Error:
-```bash
-curl -s http://localhost:3000/projects/not-a-real-id/cost
-```
-
-#### GET /projects/:id/cost/by-provider
-Success:
-```bash
-curl -s "http://localhost:3000/projects/{projectId}/cost/by-provider?page=1&limit=20"
-```
-Error:
-```bash
-curl -s "http://localhost:3000/projects/{projectId}/cost/by-provider?page=0"
-```
-
-#### GET /projects/:id/cost/by-file
-Success:
-```bash
-curl -s "http://localhost:3000/projects/{projectId}/cost/by-file?page=1&limit=20"
-```
-Error:
-```bash
-curl -s "http://localhost:3000/projects/{projectId}/cost/by-file?limit=5000"
+GET    /projects/:id/cost
+GET    /projects/:id/cost/by-provider?page=1&limit=20
+GET    /projects/:id/cost/by-file?page=1&limit=20
 ```
 
 ### Providers
 
-#### GET /providers
-Success:
-```bash
-curl -s "http://localhost:3000/providers?page=1&limit=20"
 ```
-Error:
-```bash
-curl -s "http://localhost:3000/providers?page=-1"
+GET    /providers?page=1&limit=20
+GET    /providers/:name
 ```
 
-#### GET /providers/:name
-Success:
-```bash
-curl -s http://localhost:3000/providers/stripe
-```
-Error:
-```bash
-curl -s http://localhost:3000/providers/unknown-provider
-```
+## Response Formats
 
-## Mutation/Response Contracts
-
-- POST/PATCH responses:
+**Single resource:**
 ```json
 { "data": { "...": "resource" } }
 ```
-- List responses:
+
+**Paginated list:**
 ```json
 {
   "data": [],
@@ -378,39 +222,28 @@ curl -s http://localhost:3000/providers/unknown-provider
   }
 }
 ```
-- DELETE responses: `204 No Content`
+
+**DELETE:** `204 No Content`
 
 ## Example Workflow
 
-1. Create project:
 ```bash
-curl -s -X POST http://localhost:3000/projects \
+# 1. Create project
+curl -s -X POST https://your-worker.workers.dev/projects \
   -H "Content-Type: application/json" \
-  -d "{\"name\":\"workflow-demo\"}"
-```
-2. Trigger scan:
-```bash
-curl -s -X POST http://localhost:3000/projects/{projectId}/scans \
+  -d '{"name":"my-app"}'
+
+# 2. Trigger scan
+curl -s -X POST https://your-worker.workers.dev/projects/{projectId}/scans \
   -H "Content-Type: application/json" \
-  -d "{\"apiCalls\":[{\"file\":\"src/main.ts\",\"line\":21,\"method\":\"GET\",\"url\":\"https://api.stripe.com/v1/customers\",\"library\":\"fetch\",\"frequency\":\"1200/day\"}]}"
-```
-3. View endpoints:
-```bash
-curl -s http://localhost:3000/projects/{projectId}/endpoints
-```
-4. View suggestions:
-```bash
-curl -s http://localhost:3000/projects/{projectId}/suggestions
-```
-5. View graph:
-```bash
-curl -s http://localhost:3000/projects/{projectId}/graph?cluster_by=provider
-```
+  -d '{"apiCalls":[{"file":"src/main.ts","line":21,"method":"GET","url":"https://api.stripe.com/v1/customers","library":"fetch","frequency":"1200/day"}]}'
 
-## Notes for Judging
+# 3. View endpoints
+curl -s https://your-worker.workers.dev/projects/{projectId}/endpoints
 
-- Portable Express app (no hosting lock-in)
-- Resource-oriented hierarchy with predictable naming
-- Strong error model + validation semantics
-- Immediate sandbox exploration via seeded project
-- Clean separation of routes/services/models/config/middleware for future DB swap
+# 4. View suggestions
+curl -s https://your-worker.workers.dev/projects/{projectId}/suggestions
+
+# 5. View cost breakdown
+curl -s https://your-worker.workers.dev/projects/{projectId}/cost/by-provider
+```
