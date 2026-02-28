@@ -10,6 +10,11 @@ interface ChatPageProps {
 interface Message {
   role: "ai" | "user";
   content: string;
+  applyFix?: {
+    code: string;
+    file: string;
+    line?: number;
+  };
 }
 
 const MODEL_GROUPS = [
@@ -39,6 +44,28 @@ const MODEL_GROUPS = [
   },
 ];
 
+function extractFencedCode(raw: string): string | null {
+  const match = raw.match(/```(?:\w+)?\n([\s\S]*?)```/);
+  if (!match) return null;
+  const code = match[1].trim();
+  return code.length > 0 ? code : null;
+}
+
+function extractCodeFix(raw?: string): string | null {
+  if (!raw) return null;
+  const fenced = raw.match(/^```(?:\w+)?\n([\s\S]*?)```\s*$/);
+  if (fenced) {
+    const code = fenced[1].trim();
+    return code.length > 0 ? code : null;
+  }
+  const code = raw.trim();
+  return code.length > 0 ? code : null;
+}
+
+function getApplyFixKey(applyFix: { code: string; file: string; line?: number }): string {
+  return `${applyFix.file}:${applyFix.line ?? 0}:${applyFix.code}`;
+}
+
 function getSavedModel(): string {
   const state = getVsCodeApi().getState() as { model?: string } | null;
   return state?.model ?? "eco-ai";
@@ -55,6 +82,7 @@ export function ChatPage({ context }: ChatPageProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
   const [model, setModel] = useState(getSavedModel);
+  const [appliedFixKeys, setAppliedFixKeys] = useState<Set<string>>(new Set());
 
   // Onboarding state
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -66,11 +94,16 @@ export function ChatPage({ context }: ChatPageProps) {
   // Track which context was last auto-sent so switching tabs doesn't re-trigger it,
   // but clicking "Ask AI" on a new suggestion does.
   const autoSentContextRef = useRef<SuggestionContext | null>(null);
+  const contextRef = useRef<SuggestionContext | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // Text of a message that was sent but bounced back with needsApiKey
   const pendingMessageRef = useRef<string | null>(null);
   // Whether the pending message is already in the messages list
   const pendingAddedToUI = useRef(false);
+
+  useEffect(() => {
+    contextRef.current = context;
+  }, [context]);
 
   // On mount: send modelChanged so the extension persists the model and checks API key
   useEffect(() => {
@@ -84,7 +117,10 @@ export function ChatPage({ context }: ChatPageProps) {
   useEffect(() => {
     if (context && context !== autoSentContextRef.current) {
       autoSentContextRef.current = context;
-      const autoText = `Analyze this ${context.type} issue and suggest a fix: ${context.description}`;
+      const targetFile = context.targetFile ?? context.files[0];
+      const targetLine = context.targetLine ? ` line ${context.targetLine}` : "";
+      const locationHint = targetFile ? ` Target location: ${targetFile}${targetLine}.` : "";
+      const autoText = `Analyze this ${context.type} issue and suggest a fix: ${context.description}.${locationHint} Include the proposed code in a fenced code block.`;
       if (showOnboarding) {
         // Key not entered yet — add message to UI now, store for retry after key entry
         setMessages((prev) => [...prev, { role: "user", content: autoText }]);
@@ -109,7 +145,15 @@ export function ChatPage({ context }: ChatPageProps) {
         case "chatDone":
           setIsLoading(false);
           setStreamingContent("");
-          setMessages((prev) => [...prev, { role: "ai", content: msg.fullContent }]);
+          setMessages((prev) => {
+            const currentContext = contextRef.current;
+            const file = currentContext?.targetFile ?? currentContext?.files[0];
+            const line = currentContext?.targetLine;
+            const code = extractFencedCode(msg.fullContent) ?? extractCodeFix(currentContext?.codeFix);
+            const applyFix = file && code ? { file, line, code } : undefined;
+
+            return [...prev, { role: "ai", content: msg.fullContent, applyFix }];
+          });
           pendingMessageRef.current = null;
           pendingAddedToUI.current = false;
           break;
@@ -218,6 +262,16 @@ export function ChatPage({ context }: ChatPageProps) {
 
   const handleApiKeyInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") handleSubmitApiKey();
+  };
+
+  const handleApplyFix = (applyFix: { code: string; file: string; line?: number }) => {
+    const key = getApplyFixKey(applyFix);
+    setAppliedFixKeys((prev) => {
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+    postMessage({ type: "applyFix", ...applyFix });
   };
 
   return (
@@ -356,6 +410,34 @@ export function ChatPage({ context }: ChatPageProps) {
               ) : (
                 <div style={{ maxWidth: "100%", width: "100%" }}>
                   <Markdown content={msg.content} addCopyButtons />
+                  {msg.applyFix
+                    ? (() => {
+                        const applyFix = msg.applyFix;
+                        const applied = appliedFixKeys.has(getApplyFixKey(applyFix));
+                        return (
+                          <button
+                            className="eco-btn-icon"
+                            onClick={() => handleApplyFix(applyFix)}
+                            disabled={applied}
+                            title="Apply this fix in code"
+                            style={{
+                              marginTop: "8px",
+                              gap: "4px",
+                              display: "flex",
+                              alignItems: "center",
+                              color: "var(--vscode-textLink-foreground)",
+                              fontSize: "11px",
+                              padding: 0,
+                              opacity: applied ? 0.6 : 1,
+                              cursor: applied ? "default" : "pointer",
+                            }}
+                          >
+                            <span className="codicon codicon-arrow-right" style={{ fontSize: "12px" }} />
+                            {applied ? "Applied" : "Apply Fix"}
+                          </button>
+                        );
+                      })()
+                    : null}
                 </div>
               )}
             </div>

@@ -52,6 +52,8 @@ export interface SuggestionContext {
   codeFix?: string;
   severity?: string;
   estimatedMonthlySavings?: number;
+  targetFile?: string;
+  targetLine?: number;
 }
 
 // Host -> Webview messages

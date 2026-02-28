@@ -6,7 +6,7 @@ export type WebviewMessage =
   | { type: "chat"; text: string; model: string }
   | { type: "setApiKey"; key: string }
   | { type: "modelChanged"; model: string }
-  | { type: "applyFix"; code: string; file: string }
+  | { type: "applyFix"; code: string; file: string; line?: number }
   | { type: "openFile"; file: string; line?: number };
 
 export interface SuggestionContext {
@@ -16,6 +16,8 @@ export interface SuggestionContext {
   codeFix?: string;
   severity?: string;
   estimatedMonthlySavings?: number;
+  targetFile?: string;
+  targetLine?: number;
 }
 
 // Host -> Webview messages

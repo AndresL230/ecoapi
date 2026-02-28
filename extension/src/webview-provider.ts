@@ -113,7 +113,7 @@ export class EcoSidebarProvider implements vscode.WebviewViewProvider {
         break;
       }
       case "applyFix":
-        await this.handleApplyFix(message.code, message.file);
+        await this.handleApplyFix(message.code, message.file, message.line);
         break;
       case "openFile":
         await this.handleOpenFile(message.file, message.line);
@@ -348,7 +348,7 @@ export class EcoSidebarProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async handleApplyFix(code: string, file: string) {
+  private async handleApplyFix(code: string, file: string, line?: number) {
     try {
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
       if (!workspaceFolder) return;
@@ -356,15 +356,92 @@ export class EcoSidebarProvider implements vscode.WebviewViewProvider {
       const fileUri = vscode.Uri.joinPath(workspaceFolder.uri, file);
       const doc = await vscode.workspace.openTextDocument(fileUri);
       const editor = await vscode.window.showTextDocument(doc);
+      const boundedLine = line
+        ? Math.min(Math.max(line - 1, 0), Math.max(doc.lineCount - 1, 0))
+        : undefined;
+      const position = boundedLine !== undefined
+        ? new vscode.Position(boundedLine, 0)
+        : editor.selection.active;
+      const insertLine = boundedLine ?? position.line;
+      const textToInsert = this.formatFixForInsertion(code, doc, insertLine);
 
-      const position = editor.selection.active;
+      if (this.isDuplicateFix(doc, textToInsert, insertLine)) {
+        vscode.window.showInformationMessage("ECO: This fix is already applied.");
+        return;
+      }
+
       await editor.edit((editBuilder) => {
-        editBuilder.insert(position, code);
+        editBuilder.insert(position, textToInsert);
       });
+
+      editor.selection = new vscode.Selection(position, position);
+      editor.revealRange(new vscode.Range(position, position));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to apply fix";
       vscode.window.showErrorMessage(`ECO: ${message}`);
     }
+  }
+
+  private formatFixForInsertion(code: string, doc: vscode.TextDocument, line: number): string {
+    const normalized = code.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    const rawLines = normalized.split("\n");
+
+    while (rawLines.length > 0 && rawLines[0].trim() === "") rawLines.shift();
+    while (rawLines.length > 0 && rawLines[rawLines.length - 1].trim() === "") rawLines.pop();
+
+    if (rawLines.length === 0) return "";
+
+    const baseIndent = this.getLineIndent(doc, line);
+    const minIndent = this.getMinIndent(rawLines);
+
+    const adjusted = rawLines
+      .map((current) => {
+        if (current.trim() === "") return "";
+        const currentIndent = (current.match(/^\s*/) ?? [""])[0].length;
+        const removeCount = Math.min(minIndent, currentIndent);
+        return `${baseIndent}${current.slice(removeCount)}`;
+      })
+      .join("\n");
+
+    return adjusted.endsWith("\n") ? adjusted : `${adjusted}\n`;
+  }
+
+  private getLineIndent(doc: vscode.TextDocument, line: number): string {
+    if (line < 0 || line >= doc.lineCount) return "";
+    const text = doc.lineAt(line).text;
+    return (text.match(/^\s*/) ?? [""])[0];
+  }
+
+  private getMinIndent(lines: string[]): number {
+    const nonEmpty = lines.filter((line) => line.trim().length > 0);
+    if (nonEmpty.length === 0) return 0;
+    return nonEmpty.reduce((min, line) => {
+      const indent = (line.match(/^\s*/) ?? [""])[0].length;
+      return Math.min(min, indent);
+    }, Number.MAX_SAFE_INTEGER);
+  }
+
+  private isDuplicateFix(doc: vscode.TextDocument, textToInsert: string, line: number): boolean {
+    const normalizedSnippet = textToInsert.trimEnd();
+    if (!normalizedSnippet) return true;
+
+    const fullText = doc.getText();
+    if (fullText.includes(normalizedSnippet)) {
+      return true;
+    }
+
+    const snippetLineCount = normalizedSnippet.split("\n").length;
+    const endLine = Math.min(doc.lineCount - 1, line + snippetLineCount - 1);
+    if (line <= endLine && doc.lineCount > 0) {
+      const start = new vscode.Position(line, 0);
+      const end = doc.lineAt(endLine).range.end;
+      const existing = doc.getText(new vscode.Range(start, end)).trimEnd();
+      if (existing === normalizedSnippet) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   private async handleOpenFile(file: string, line?: number) {

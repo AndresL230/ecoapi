@@ -26,6 +26,32 @@ function extractCode(raw: string): { code: string; language: string } {
   return { language: "", code: raw.trim() };
 }
 
+function resolveSuggestionTarget(
+  suggestion: Suggestion,
+  endpoints: EndpointRecord[]
+): { file?: string; line?: number } {
+  for (const endpointId of suggestion.affectedEndpoints) {
+    const endpoint = endpoints.find((ep) => ep.id === endpointId);
+    if (!endpoint) continue;
+
+    for (const preferredFile of suggestion.affectedFiles) {
+      const match = endpoint.callSites.find((site) => site.file === preferredFile);
+      if (match) return { file: match.file, line: match.line };
+    }
+
+    if (endpoint.callSites.length > 0) {
+      const first = endpoint.callSites[0];
+      return { file: first.file, line: first.line };
+    }
+  }
+
+  if (suggestion.affectedFiles.length > 0) {
+    return { file: suggestion.affectedFiles[0] };
+  }
+
+  return {};
+}
+
 function SeverityIcon({ severity }: { severity: string }) {
   if (severity === "high") {
     return (
@@ -70,7 +96,7 @@ function TypeBadge({ type }: { type: string }) {
   );
 }
 
-function CodeFix({ codeFix, file }: { codeFix: string; file?: string }) {
+function CodeFix({ codeFix, file, line }: { codeFix: string; file?: string; line?: number }) {
   const [copied, setCopied] = useState(false);
   const { code, language } = extractCode(codeFix);
   if (!code) return null;
@@ -107,7 +133,7 @@ function CodeFix({ codeFix, file }: { codeFix: string; file?: string }) {
           {file && (
             <button
               className="eco-btn-icon"
-              onClick={() => postMessage({ type: "applyFix", code, file })}
+              onClick={() => postMessage({ type: "applyFix", code, file, line })}
               title="Apply fix"
               style={{ fontSize: "11px", gap: "3px", display: "flex", alignItems: "center", color: "var(--vscode-textLink-foreground)" }}
             >
@@ -146,11 +172,13 @@ function SuggestionCard({
   expanded,
   onToggle,
   onAskAI,
+  target,
 }: {
   suggestion: Suggestion;
   expanded: boolean;
   onToggle: () => void;
   onAskAI: (s: Suggestion) => void;
+  target: { file?: string; line?: number };
 }) {
   const firstLine = suggestion.description.split("\n")[0];
   const descShort = firstLine.length > 90 ? firstLine.slice(0, 90) + "…" : firstLine;
@@ -199,7 +227,7 @@ function SuggestionCard({
           )}
 
           {suggestion.codeFix && (
-            <CodeFix codeFix={suggestion.codeFix} file={suggestion.affectedFiles[0]} />
+            <CodeFix codeFix={suggestion.codeFix} file={target.file} line={target.line} />
           )}
 
           <button
@@ -231,12 +259,14 @@ function SeverityGroup({
   expanded,
   onToggle,
   onAskAI,
+  resolveTarget,
 }: {
   label: string;
   suggestions: Suggestion[];
   expanded: Set<string>;
   onToggle: (id: string) => void;
   onAskAI: (s: Suggestion) => void;
+  resolveTarget: (s: Suggestion) => { file?: string; line?: number };
 }) {
   if (suggestions.length === 0) return null;
 
@@ -268,6 +298,7 @@ function SeverityGroup({
           expanded={expanded.has(s.id)}
           onToggle={() => onToggle(s.id)}
           onAskAI={onAskAI}
+          target={resolveTarget(s)}
         />
       ))}
     </div>
@@ -367,13 +398,20 @@ export function ResultsPage({ suggestions, summary, endpoints }: ResultsPageProp
   };
 
   const handleAskAI = (suggestion: Suggestion) => {
+    const target = resolveSuggestionTarget(suggestion, endpoints);
+    const files = target.file
+      ? [target.file, ...suggestion.affectedFiles.filter((f) => f !== target.file)]
+      : suggestion.affectedFiles;
+
     setChatContext({
       type: suggestion.type,
       description: suggestion.description,
-      files: suggestion.affectedFiles,
+      files,
       codeFix: suggestion.codeFix,
       severity: suggestion.severity,
       estimatedMonthlySavings: suggestion.estimatedMonthlySavings,
+      targetFile: target.file,
+      targetLine: target.line,
     });
     setTab("chat");
   };
@@ -446,9 +484,30 @@ export function ResultsPage({ suggestions, summary, endpoints }: ResultsPageProp
             </div>
           ) : (
             <>
-              <SeverityGroup label="HIGH" suggestions={high} expanded={expanded} onToggle={toggleCard} onAskAI={handleAskAI} />
-              <SeverityGroup label="MEDIUM" suggestions={medium} expanded={expanded} onToggle={toggleCard} onAskAI={handleAskAI} />
-              <SeverityGroup label="LOW" suggestions={low} expanded={expanded} onToggle={toggleCard} onAskAI={handleAskAI} />
+              <SeverityGroup
+                label="HIGH"
+                suggestions={high}
+                expanded={expanded}
+                onToggle={toggleCard}
+                onAskAI={handleAskAI}
+                resolveTarget={(s) => resolveSuggestionTarget(s, endpoints)}
+              />
+              <SeverityGroup
+                label="MEDIUM"
+                suggestions={medium}
+                expanded={expanded}
+                onToggle={toggleCard}
+                onAskAI={handleAskAI}
+                resolveTarget={(s) => resolveSuggestionTarget(s, endpoints)}
+              />
+              <SeverityGroup
+                label="LOW"
+                suggestions={low}
+                expanded={expanded}
+                onToggle={toggleCard}
+                onAskAI={handleAskAI}
+                resolveTarget={(s) => resolveSuggestionTarget(s, endpoints)}
+              />
             </>
           )}
 
