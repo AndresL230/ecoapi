@@ -247,3 +247,58 @@ curl -s https://your-worker.workers.dev/projects/{projectId}/suggestions
 # 5. View cost breakdown
 curl -s https://your-worker.workers.dev/projects/{projectId}/cost/by-provider
 ```
+
+## VS Code / Cursor Extension
+
+ECO also ships as a VS Code extension that scans your workspace directly from the editor.
+
+### Install Locally
+
+```bash
+# 1. Install dependencies
+cd eco-extension
+npm install
+cd webview && npm install && cd ..
+
+# 2. Build the extension
+npm run build
+
+# 3. Package as .vsix
+npx @vscode/vsce package --no-dependencies --allow-missing-repository
+```
+
+This produces `eco-api-analyzer-0.1.0.vsix` in the `eco-extension/` folder.
+
+### Install in VS Code / Cursor
+
+**Option A — Command Palette:**
+1. Open VS Code or Cursor
+2. Press `Cmd+Shift+P` (macOS) or `Ctrl+Shift+P` (Windows/Linux)
+3. Type **"Install from VSIX"** and select it
+4. Navigate to `eco-extension/eco-api-analyzer-0.1.0.vsix`
+
+**Option B — Terminal:**
+```bash
+# VS Code
+code --install-extension eco-extension/eco-api-analyzer-0.1.0.vsix
+
+# Cursor
+cursor --install-extension eco-extension/eco-api-analyzer-0.1.0.vsix
+```
+
+### Usage
+
+1. Open any project folder in VS Code / Cursor
+2. Press `Cmd+Shift+P` and run **"ECO: Open API Analyzer"**
+3. Click **Start Scanning** to analyze your workspace for API calls
+4. Review suggestions grouped by severity (HIGH / MEDIUM / LOW)
+5. Click **fix** on any suggestion to get an AI-powered code fix via OpenAI
+
+### Configuration
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `eco.openaiApiKey` | `""` | OpenAI API key (prompted on first chat if empty) |
+| `eco.openaiModel` | `gpt-4o-mini` | OpenAI model for the chat feature |
+| `eco.scanGlob` | `**/*.{ts,tsx,js,jsx,py,go,java,rb}` | Files to scan |
+| `eco.excludeGlob` | `**/node_modules/**,**/dist/**,...` | Files to exclude |
