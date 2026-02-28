@@ -30,6 +30,10 @@ function resolveSuggestionTarget(
   suggestion: Suggestion,
   endpoints: EndpointRecord[]
 ): { file?: string; line?: number } {
+  if (suggestion.targetLine && suggestion.affectedFiles.length > 0) {
+    return { file: suggestion.affectedFiles[0], line: suggestion.targetLine };
+  }
+
   for (const endpointId of suggestion.affectedEndpoints) {
     const endpoint = endpoints.find((ep) => ep.id === endpointId);
     if (!endpoint) continue;

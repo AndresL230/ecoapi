@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { scanWorkspace } from "./scanner/workspace-scanner";
+import { scanWorkspace, detectLocalWastePatterns } from "./scanner/workspace-scanner";
 import { createProject, submitScan, getAllEndpoints, getAllSuggestions } from "./api-client";
 import { buildSystemPrompt } from "./chat/prompts";
 import type { WebviewMessage, HostMessage } from "./messages";
@@ -25,6 +25,130 @@ function isOpenAIModel(model: string): boolean {
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+}
+
+function mapStatusToSuggestionType(status: EndpointRecord["status"]): Suggestion["type"] | null {
+  switch (status) {
+    case "cacheable":
+      return "cache";
+    case "batchable":
+      return "batch";
+    case "redundant":
+      return "redundancy";
+    case "n_plus_one_risk":
+      return "n_plus_one";
+    case "rate_limit_risk":
+      return "rate_limit";
+    default:
+      return null;
+  }
+}
+
+function chooseSeverity(status: EndpointRecord["status"], monthlyCost: number): Suggestion["severity"] {
+  if (status === "n_plus_one_risk" || status === "redundant") {
+    return monthlyCost >= 100 ? "high" : "medium";
+  }
+  if (status === "rate_limit_risk") {
+    return monthlyCost >= 50 ? "high" : "medium";
+  }
+  return monthlyCost >= 100 ? "medium" : "low";
+}
+
+function estimateSavings(status: EndpointRecord["status"], monthlyCost: number): number {
+  const multiplier =
+    status === "redundant" ? 0.4 :
+    status === "cacheable" ? 0.25 :
+    status === "batchable" ? 0.2 :
+    status === "n_plus_one_risk" ? 0.35 :
+    status === "rate_limit_risk" ? 0.15 :
+    0.1;
+  return Number((monthlyCost * multiplier).toFixed(2));
+}
+
+function buildAggressiveDescription(endpoint: EndpointRecord, type: Suggestion["type"]): string {
+  const firstSite = endpoint.callSites[0];
+  const location = firstSite ? ` (${firstSite.file}:${firstSite.line})` : "";
+  switch (type) {
+    case "cache":
+      return `Potential caching opportunity detected for \`${endpoint.method} ${endpoint.url}\`${location}. This endpoint appears cacheable; consider adding response caching with explicit TTL and cache invalidation rules to reduce repeated requests and cost.`;
+    case "batch":
+      return `Potential batching opportunity detected for \`${endpoint.method} ${endpoint.url}\`${location}. This endpoint appears in a pattern that may benefit from request batching or bulk-fetch patterns to reduce request volume.`;
+    case "redundancy":
+      return `Potential redundant API usage detected for \`${endpoint.method} ${endpoint.url}\`${location}. Multiple call paths may be invoking equivalent requests; consider deduping in-flight requests and consolidating repeated fetches.`;
+    case "n_plus_one":
+      return `Potential N+1 API pattern detected for \`${endpoint.method} ${endpoint.url}\`${location}. Review loop-driven request behavior and replace with prefetch/batch patterns where possible.`;
+    case "rate_limit":
+      return `Potential rate-limit risk detected for \`${endpoint.method} ${endpoint.url}\`${location}. Add throttling/backoff and request coalescing to reduce burst frequency and avoid provider limits.`;
+    default:
+      return `Potential optimization opportunity detected for \`${endpoint.method} ${endpoint.url}\`${location}.`;
+  }
+}
+
+function buildAggressiveSuggestions(endpoints: EndpointRecord[], suggestions: Suggestion[]): Suggestion[] {
+  const existing = new Set<string>();
+  for (const suggestion of suggestions) {
+    for (const endpointId of suggestion.affectedEndpoints) {
+      existing.add(`${endpointId}:${suggestion.type}`);
+    }
+  }
+
+  const extras: Suggestion[] = [];
+  for (const endpoint of endpoints) {
+    const type = mapStatusToSuggestionType(endpoint.status);
+    if (!type) continue;
+
+    const dedupeKey = `${endpoint.id}:${type}`;
+    if (existing.has(dedupeKey)) continue;
+
+    extras.push({
+      id: `local-${endpoint.id}-${type}`,
+      projectId: endpoint.projectId,
+      scanId: endpoint.scanId,
+      type,
+      severity: chooseSeverity(endpoint.status, endpoint.monthlyCost),
+      affectedEndpoints: [endpoint.id],
+      affectedFiles: endpoint.files,
+      estimatedMonthlySavings: estimateSavings(endpoint.status, endpoint.monthlyCost),
+      description: buildAggressiveDescription(endpoint, type),
+      codeFix: "",
+    });
+  }
+
+  return [...suggestions, ...extras];
+}
+
+function mergeLocalWasteFindings(
+  baseSuggestions: Suggestion[],
+  localFindings: Awaited<ReturnType<typeof detectLocalWastePatterns>>,
+  projectId: string,
+  scanId: string
+): Suggestion[] {
+  const existingByDescAndFile = new Set(
+    baseSuggestions.map((s) => `${s.description}::${s.affectedFiles[0] ?? ""}`)
+  );
+
+  const locals: Suggestion[] = [];
+  for (const finding of localFindings) {
+    const key = `${finding.description}::${finding.affectedFile}`;
+    if (existingByDescAndFile.has(key)) continue;
+    existingByDescAndFile.add(key);
+
+    locals.push({
+      id: finding.id,
+      projectId,
+      scanId,
+      type: finding.type,
+      severity: finding.severity,
+      affectedEndpoints: [],
+      affectedFiles: [finding.affectedFile],
+      targetLine: finding.line,
+      estimatedMonthlySavings: 0,
+      description: finding.description,
+      codeFix: "",
+    });
+  }
+
+  return [...baseSuggestions, ...locals];
 }
 
 export class EcoSidebarProvider implements vscode.WebviewViewProvider {
@@ -125,15 +249,18 @@ export class EcoSidebarProvider implements vscode.WebviewViewProvider {
     try {
       this.chatHistory = [];
 
-      const apiCalls = await scanWorkspace((progress) => {
-        this.postMessage({
-          type: "scanProgress",
-          file: progress.file,
-          index: progress.index,
-          total: progress.total,
-          endpointsSoFar: progress.endpointsSoFar,
-        });
-      });
+      const [apiCalls, localWasteFindings] = await Promise.all([
+        scanWorkspace((progress) => {
+          this.postMessage({
+            type: "scanProgress",
+            file: progress.file,
+            index: progress.index,
+            total: progress.total,
+            endpointsSoFar: progress.endpointsSoFar,
+          });
+        }),
+        detectLocalWastePatterns(),
+      ]);
 
       this.postMessage({ type: "scanComplete" });
 
@@ -180,13 +307,20 @@ export class EcoSidebarProvider implements vscode.WebviewViewProvider {
       ]);
 
       this.lastEndpoints = endpoints;
-      this.lastSuggestions = suggestions;
+      const aggressiveSuggestions = buildAggressiveSuggestions(endpoints, suggestions);
+      const mergedSuggestions = mergeLocalWasteFindings(
+        aggressiveSuggestions,
+        localWasteFindings,
+        projectId,
+        scanResult.scanId
+      );
+      this.lastSuggestions = mergedSuggestions;
       this.lastSummary = scanResult.summary;
 
       this.postMessage({
         type: "scanResults",
         endpoints,
-        suggestions,
+        suggestions: mergedSuggestions,
         summary: scanResult.summary,
       });
     } catch (err: unknown) {
@@ -356,12 +490,11 @@ export class EcoSidebarProvider implements vscode.WebviewViewProvider {
       const fileUri = vscode.Uri.joinPath(workspaceFolder.uri, file);
       const doc = await vscode.workspace.openTextDocument(fileUri);
       const editor = await vscode.window.showTextDocument(doc);
-      const boundedLine = line
-        ? Math.min(Math.max(line - 1, 0), Math.max(doc.lineCount - 1, 0))
-        : undefined;
-      const position = boundedLine !== undefined
-        ? new vscode.Position(boundedLine, 0)
-        : editor.selection.active;
+      const boundedLine = Math.min(
+        Math.max((line ?? 1) - 1, 0),
+        Math.max(doc.lineCount - 1, 0)
+      );
+      const position = new vscode.Position(boundedLine, 0);
       const insertLine = boundedLine ?? position.line;
       const textToInsert = this.formatFixForInsertion(code, doc, insertLine);
 

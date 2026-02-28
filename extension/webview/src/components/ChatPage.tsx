@@ -149,7 +149,10 @@ export function ChatPage({ context }: ChatPageProps) {
             const currentContext = contextRef.current;
             const file = currentContext?.targetFile ?? currentContext?.files[0];
             const line = currentContext?.targetLine;
-            const code = extractFencedCode(msg.fullContent) ?? extractCodeFix(currentContext?.codeFix);
+            const code =
+              extractFencedCode(msg.fullContent) ??
+              extractCodeFix(currentContext?.codeFix) ??
+              msg.fullContent.trim();
             const applyFix = file && code ? { file, line, code } : undefined;
 
             return [...prev, { role: "ai", content: msg.fullContent, applyFix }];

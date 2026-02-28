@@ -60,6 +60,7 @@ export interface Suggestion {
   severity: Severity;
   affectedEndpoints: string[];
   affectedFiles: string[];
+  targetLine?: number;
   estimatedMonthlySavings: number;
   description: string;
   codeFix: string;
