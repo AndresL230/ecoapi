@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
-import { randomUUID } from "crypto";
 import { scanWorkspace } from "./scanner/workspace-scanner";
-import { analyzeApiCalls } from "./analysis/analysis-service";
+import { createProject, submitScan, getAllEndpoints, getAllSuggestions } from "./api-client";
 import { buildSystemPrompt } from "./chat/prompts";
 import type { WebviewMessage, HostMessage } from "./messages";
 import type { EndpointRecord, Suggestion, ScanSummary } from "./analysis/types";
@@ -34,6 +33,7 @@ export class EcoSidebarProvider implements vscode.WebviewViewProvider {
   private lastEndpoints: EndpointRecord[] = [];
   private lastSuggestions: Suggestion[] = [];
   private lastSummary: ScanSummary | null = null;
+  private projectId: string | null = null;
 
   // Chat state
   private chatHistory: ChatMessage[] = [];
@@ -59,6 +59,8 @@ export class EcoSidebarProvider implements vscode.WebviewViewProvider {
     webviewView.webview.onDidReceiveMessage(
       (message: WebviewMessage) => this.handleMessage(message)
     );
+
+    this.projectId = this.context.globalState.get<string>("eco.projectId") ?? null;
 
     // Check API key status once the webview is ready
     setTimeout(() => this.checkAndNotifyApiKey(), 300);
@@ -150,24 +152,58 @@ export class EcoSidebarProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      const projectId = randomUUID();
-      const scanId = randomUUID();
-      const result = analyzeApiCalls(projectId, scanId, apiCalls);
+      // Ensure we have a project on the remote API
+      const projectId = await this.getOrCreateProject();
 
-      this.lastEndpoints = result.endpoints;
-      this.lastSuggestions = result.suggestions;
-      this.lastSummary = result.summary;
+      // Submit scan and fetch results
+      let scanResult;
+      try {
+        scanResult = await submitScan(projectId, apiCalls);
+      } catch (err: unknown) {
+        // Project may have been deleted — create a fresh one and retry once
+        if ((err as { status?: number }).status === 404) {
+          const freshId = await createProject(this.getWorkspaceName());
+          this.projectId = freshId;
+          await this.context.globalState.update("eco.projectId", freshId);
+          scanResult = await submitScan(freshId, apiCalls);
+        } else {
+          throw err;
+        }
+      }
+
+      const [endpoints, suggestions] = await Promise.all([
+        getAllEndpoints(projectId, scanResult.scanId),
+        getAllSuggestions(projectId, scanResult.scanId),
+      ]);
+
+      this.lastEndpoints = endpoints;
+      this.lastSuggestions = suggestions;
+      this.lastSummary = scanResult.summary;
 
       this.postMessage({
         type: "scanResults",
-        endpoints: result.endpoints,
-        suggestions: result.suggestions,
-        summary: result.summary,
+        endpoints,
+        suggestions,
+        summary: scanResult.summary,
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Unknown error during scan";
       this.postMessage({ type: "error", message });
     }
+  }
+
+  private async getOrCreateProject(): Promise<string> {
+    if (this.projectId) {
+      return this.projectId;
+    }
+    const id = await createProject(this.getWorkspaceName());
+    this.projectId = id;
+    await this.context.globalState.update("eco.projectId", id);
+    return id;
+  }
+
+  private getWorkspaceName(): string {
+    return vscode.workspace.workspaceFolders?.[0]?.name ?? "eco-workspace";
   }
 
   private async handleSetApiKey(key: string) {

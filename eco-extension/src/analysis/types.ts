@@ -5,7 +5,6 @@ export interface ApiCallInput {
   url: string;
   library: string;
   frequency?: string;
-  codeSnippet?: string;
 }
 
 export interface ScanSummary {
@@ -42,7 +41,6 @@ export interface EndpointCallSite {
   line: number;
   library: string;
   frequency?: string;
-  codeSnippet?: string;
 }
 
 export type SuggestionType =
