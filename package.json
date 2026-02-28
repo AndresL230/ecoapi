@@ -1,0 +1,29 @@
+{
+  "name": "api-usage-analyzer",
+  "version": "1.0.0",
+  "description": "REST API for analyzing codebase web API usage, costs, and optimization suggestions.",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "keywords": [
+    "rest",
+    "express",
+    "typescript",
+    "api-analysis",
+    "hackathon"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
