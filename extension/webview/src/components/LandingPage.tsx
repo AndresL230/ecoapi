@@ -11,9 +11,9 @@ export function LandingPage({ onStartScan }: LandingPageProps) {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        justifyContent: "center",
+        justifyContent: "flex-start",
         height: "100%",
-        padding: "24px",
+        padding: "56px 24px 24px",
       }}
     >
       <LeafIcon size={40} />
@@ -41,14 +41,21 @@ export function LandingPage({ onStartScan }: LandingPageProps) {
         API usage analyzer for your codebase.
       </p>
 
-      <button
-        className="eco-btn-primary"
-        onClick={onStartScan}
-        style={{ marginTop: "24px", gap: "6px" }}
-      >
-        <span className="codicon codicon-search" style={{ fontSize: "13px" }} />
-        Scan Workspace
-      </button>
+      <div style={{ marginTop: "24px", display: "flex", width: "100%", maxWidth: "340px", gap: "8px" }}>
+        <button
+          className="eco-btn-primary"
+          onClick={onStartScan}
+          style={{ flex: 1, justifyContent: "center", height: "34px", padding: "0 12px", whiteSpace: "nowrap" }}
+        >
+          Scan Workspace
+        </button>
+        <button
+          className="eco-btn-primary"
+          style={{ flex: 1, justifyContent: "center", height: "34px", padding: "0 12px", whiteSpace: "nowrap" }}
+        >
+          Open Dashboard
+        </button>
+      </div>
     </div>
   );
 }

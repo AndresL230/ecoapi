@@ -309,14 +309,13 @@ export function ChatPage({ context }: ChatPageProps) {
             whiteSpace: "nowrap",
           }}
         >
-          <span className="codicon codicon-tag" style={{ fontSize: "11px", marginRight: "4px" }} />
           {context.type} · {context.files[0]}
         </div>
       )}
 
       {showOnboarding ? (
         /* Onboarding card */
-        <div style={{ flex: 1, padding: "16px", overflowY: "auto", minHeight: 0 }}>
+        <div className="eco-scroll-invisible" style={{ flex: 1, padding: "16px", overflowY: "auto", minHeight: 0 }}>
           <div
             style={{
               border: "1px solid var(--vscode-input-border)",
@@ -382,6 +381,7 @@ export function ChatPage({ context }: ChatPageProps) {
       ) : (
         /* Messages */
         <div
+          className="eco-scroll-invisible"
           style={{
             flex: 1,
             overflowY: "auto",
@@ -435,23 +435,25 @@ export function ChatPage({ context }: ChatPageProps) {
                         const applied = appliedFixKeys.has(getApplyFixKey(applyFix));
                         return (
                           <button
-                            className="eco-btn-icon"
+                            className="eco-btn-primary"
                             onClick={() => handleApplyFix(applyFix)}
                             disabled={applied}
                             title="Apply this fix in code"
                             style={{
                               marginTop: "8px",
-                              gap: "4px",
+                              gap: "5px",
                               display: "flex",
                               alignItems: "center",
-                              color: "var(--vscode-textLink-foreground)",
+                              color: "var(--vscode-button-foreground)",
                               fontSize: "11px",
-                              padding: 0,
+                              padding: "4px 10px",
+                              background: "var(--vscode-button-background)",
+                              border: "1px solid var(--vscode-button-border, transparent)",
+                              borderRadius: "4px",
                               opacity: applied ? 0.6 : 1,
                               cursor: applied ? "default" : "pointer",
                             }}
                           >
-                            <span className="codicon codicon-arrow-right" style={{ fontSize: "12px" }} />
                             {applied ? "Applied" : "Apply Fix"}
                           </button>
                         );
@@ -565,21 +567,22 @@ export function ChatPage({ context }: ChatPageProps) {
             title="Send"
             style={{
               flexShrink: 0,
-              width: "28px",
+              minWidth: "62px",
               height: "28px",
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
-              background: "transparent",
-              border: "none",
+              gap: "5px",
+              background: "var(--vscode-button-background)",
+              border: "1px solid var(--vscode-button-border, transparent)",
               borderRadius: "3px",
               cursor: isLoading || !input.trim() ? "default" : "pointer",
-              padding: "4px",
-              color: "#ffffff",
+              padding: "4px 10px",
+              color: "var(--vscode-button-foreground)",
               opacity: input.trim() && !isLoading ? 1 : 0.45,
             }}
           >
-            <span className="codicon codicon-send" style={{ fontSize: "14px" }} />
+            <span style={{ fontSize: "11px" }}>Send</span>
           </button>
         </div>
       )}

@@ -116,7 +116,7 @@ function CodeFix({ codeFix, file, line }: { codeFix: string; file?: string; line
               title="Apply fix"
               style={{ fontSize: "11px", gap: "3px", display: "flex", alignItems: "center", color: "var(--vscode-textLink-foreground)" }}
             >
-              <span className="codicon codicon-wrench" style={{ fontSize: "11px" }} />
+              <span style={{ fontSize: "11px", fontWeight: 700, lineHeight: 1 }}>✓</span>
               apply
             </button>
           )}
@@ -214,12 +214,15 @@ function SuggestionCard({
               display: "flex",
               justifyContent: "flex-start",
               alignItems: "center",
-              color: "var(--vscode-textLink-foreground)",
+              color: "#ffffff",
+              background: "#2ea8ff",
+              border: "1px solid #1b8fdf",
+              borderRadius: "4px",
               fontSize: "11px",
-              padding: "4px 0",
+              fontWeight: 600,
+              padding: "5px 10px",
             }}
           >
-            <span className="codicon codicon-hubot" style={{ fontSize: "12px" }} />
             Ask AI
           </button>
         </div>
@@ -259,21 +262,13 @@ function SeverityGroup({
   return (
     <div>
       <button
-        className="eco-section-header"
+        className="eco-severity-header"
         onClick={onToggleGroup}
         style={{
           color,
-          justifyContent: "space-between",
-          borderBottom: open ? "1px solid var(--vscode-panel-border)" : "1px solid var(--vscode-panel-border)",
         }}
       >
-        <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-          <span
-            className="codicon codicon-chevron-right"
-            style={{ fontSize: "12px", transition: "transform 180ms ease", transform: open ? "rotate(90deg)" : "rotate(0deg)" }}
-          />
-          {label}
-        </span>
+        <span>{label}</span>
         <span style={{ fontSize: "10px", opacity: 0.9 }}>{suggestions.length}</span>
       </button>
       {open &&
@@ -297,10 +292,6 @@ function EndpointsList({ endpoints, topBorder }: { endpoints: EndpointRecord[]; 
   return (
     <div style={topBorder ? { borderTop: "1px solid var(--vscode-panel-border)" } : undefined}>
       <button className="eco-section-header" onClick={() => setOpen((v) => !v)}>
-        <span
-          className="codicon codicon-chevron-right"
-          style={{ fontSize: "12px", transition: "transform 180ms ease", transform: open ? "rotate(90deg)" : "rotate(0deg)" }}
-        />
         Endpoints ({endpoints.length})
       </button>
 
