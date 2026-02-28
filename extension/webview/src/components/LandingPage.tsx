@@ -44,9 +44,9 @@ export function LandingPage({ onStartScan }: LandingPageProps) {
       <button
         className="eco-btn-primary"
         onClick={onStartScan}
-        style={{ marginTop: "24px" }}
+        style={{ marginTop: "24px", gap: "6px" }}
       >
-        <span className="codicon codicon-refresh" />
+        <span className="codicon codicon-search" style={{ fontSize: "13px" }} />
         Scan Workspace
       </button>
     </div>

@@ -21,6 +21,16 @@ export interface ScanProgress {
   endpointsSoFar: number;
 }
 
+async function readUriText(uri: vscode.Uri): Promise<string> {
+  const openDoc = vscode.workspace.textDocuments.find((doc) => doc.uri.toString() === uri.toString());
+  if (openDoc) {
+    return openDoc.getText();
+  }
+
+  const content = await vscode.workspace.fs.readFile(uri);
+  return Buffer.from(content).toString("utf-8");
+}
+
 export async function scanWorkspace(
   onProgress?: (progress: ScanProgress) => void
 ): Promise<ApiCallInput[]> {
@@ -39,8 +49,7 @@ export async function scanWorkspace(
     const relativePath = vscode.workspace.asRelativePath(uri, false);
 
     try {
-      const content = await vscode.workspace.fs.readFile(uri);
-      const text = Buffer.from(content).toString("utf-8");
+      const text = await readUriText(uri);
       const lines = text.split("\n");
 
       for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
@@ -318,8 +327,7 @@ export async function detectLocalWastePatterns(): Promise<LocalWasteFinding[]> {
   for (const uri of uris) {
     try {
       const relativePath = vscode.workspace.asRelativePath(uri, false);
-      const content = await vscode.workspace.fs.readFile(uri);
-      const text = Buffer.from(content).toString("utf-8");
+      const text = await readUriText(uri);
       const lines = text.split("\n");
       const file: FileContext = { path: relativePath, text, lines };
 

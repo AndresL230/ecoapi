@@ -56,31 +56,6 @@ function resolveSuggestionTarget(
   return {};
 }
 
-function SeverityIcon({ severity }: { severity: string }) {
-  if (severity === "high") {
-    return (
-      <span
-        className="codicon codicon-error"
-        style={{ color: "var(--vscode-editorError-foreground)", fontSize: "14px", flexShrink: 0 }}
-      />
-    );
-  }
-  if (severity === "medium") {
-    return (
-      <span
-        className="codicon codicon-warning"
-        style={{ color: "var(--vscode-editorWarning-foreground)", fontSize: "14px", flexShrink: 0 }}
-      />
-    );
-  }
-  return (
-    <span
-      className="codicon codicon-info"
-      style={{ color: "var(--vscode-descriptionForeground)", fontSize: "14px", flexShrink: 0 }}
-    />
-  );
-}
-
 function TypeBadge({ type }: { type: string }) {
   return (
     <span
@@ -141,7 +116,7 @@ function CodeFix({ codeFix, file, line }: { codeFix: string; file?: string; line
               title="Apply fix"
               style={{ fontSize: "11px", gap: "3px", display: "flex", alignItems: "center", color: "var(--vscode-textLink-foreground)" }}
             >
-              <span className="codicon codicon-arrow-right" style={{ fontSize: "11px" }} />
+              <span className="codicon codicon-wrench" style={{ fontSize: "11px" }} />
               apply
             </button>
           )}
@@ -190,11 +165,7 @@ function SuggestionCard({
   return (
     <div className="eco-suggestion">
       <button className="eco-suggestion-header" onClick={onToggle}>
-        <span
-          className={`codicon ${expanded ? "codicon-chevron-down" : "codicon-chevron-right"}`}
-          style={{ fontSize: "12px", flexShrink: 0, marginTop: "1px", color: "var(--vscode-descriptionForeground)" }}
-        />
-        <SeverityIcon severity={suggestion.severity} />
+        <span aria-hidden="true" className={`eco-disclosure${expanded ? " open" : ""}`} />
         <TypeBadge type={suggestion.type} />
         <span style={{ flex: 1, lineHeight: 1.4, overflow: "hidden" }}>{descShort}</span>
         {suggestion.estimatedMonthlySavings > 0 && (
@@ -248,7 +219,7 @@ function SuggestionCard({
               padding: "4px 0",
             }}
           >
-            <span className="codicon codicon-comment" style={{ fontSize: "12px" }} />
+            <span className="codicon codicon-hubot" style={{ fontSize: "12px" }} />
             Ask AI
           </button>
         </div>
@@ -316,8 +287,8 @@ function EndpointsList({ endpoints, topBorder }: { endpoints: EndpointRecord[]; 
     <div style={topBorder ? { borderTop: "1px solid var(--vscode-panel-border)" } : undefined}>
       <button className="eco-section-header" onClick={() => setOpen((v) => !v)}>
         <span
-          className={`codicon ${open ? "codicon-chevron-down" : "codicon-chevron-right"}`}
-          style={{ fontSize: "12px" }}
+          className="codicon codicon-chevron-right"
+          style={{ fontSize: "12px", transition: "transform 180ms ease", transform: open ? "rotate(90deg)" : "rotate(0deg)" }}
         />
         Endpoints ({endpoints.length})
       </button>
@@ -443,7 +414,7 @@ export function ResultsPage({ suggestions, summary, endpoints }: ResultsPageProp
       </div>
 
       {/* Findings — always mounted to preserve scroll position; hidden via display */}
-      <div style={{ flex: 1, overflow: "hidden", display: tab === "findings" ? "flex" : "none", flexDirection: "column", minHeight: 0 }}>
+      <div className="eco-panel-view" style={{ flex: 1, overflow: "hidden", display: tab === "findings" ? "flex" : "none", flexDirection: "column", minHeight: 0 }}>
         {/* Summary bar */}
         <div
           style={{
@@ -520,7 +491,7 @@ export function ResultsPage({ suggestions, summary, endpoints }: ResultsPageProp
       </div>
 
       {/* Chat — always mounted to preserve message history; hidden via display */}
-      <div style={{ flex: 1, display: tab === "chat" ? "flex" : "none", flexDirection: "column", minHeight: 0 }}>
+      <div className="eco-panel-view" style={{ flex: 1, display: tab === "chat" ? "flex" : "none", flexDirection: "column", minHeight: 0 }}>
         <ChatPage context={chatContext} />
       </div>
     </div>

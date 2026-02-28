@@ -1,6 +1,11 @@
 @import "tailwindcss";
 @import "@vscode/codicons/dist/codicon.css";
 
+:root {
+  --eco-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --eco-ease-emphasis: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -25,6 +30,7 @@ html, body, #root {
 }
 
 .eco-tab {
+  position: relative;
   padding: 6px 12px;
   font-family: var(--vscode-font-family);
   font-size: 11px;
@@ -34,7 +40,20 @@ html, body, #root {
   color: var(--vscode-tab-inactiveForeground);
   cursor: pointer;
   white-space: nowrap;
-  transition: color 150ms ease, background 150ms ease;
+  transition: color 180ms var(--eco-ease-standard), background 180ms var(--eco-ease-standard);
+}
+
+.eco-tab::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 2px;
+  background: var(--vscode-tab-activeBorderTop, var(--vscode-focusBorder));
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 220ms var(--eco-ease-emphasis);
 }
 
 .eco-tab:hover {
@@ -46,6 +65,10 @@ html, body, #root {
   color: var(--vscode-tab-activeForeground);
   background: var(--vscode-tab-activeBackground);
   border-bottom-color: var(--vscode-tab-activeBorderTop, var(--vscode-focusBorder));
+}
+
+.eco-tab.active::after {
+  transform: scaleX(1);
 }
 
 /* ─── Buttons ─── */
@@ -80,12 +103,16 @@ html, body, #root {
   padding: 4px;
   border-radius: 3px;
   line-height: 1;
-  transition: background 150ms ease, color 150ms ease;
+  transition:
+    background 160ms var(--eco-ease-standard),
+    color 160ms var(--eco-ease-standard),
+    transform 160ms var(--eco-ease-standard);
 }
 
 .eco-btn-icon:hover {
   background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground));
   color: var(--vscode-foreground);
+  transform: translateY(-1px);
 }
 
 .eco-btn-link {
@@ -258,6 +285,7 @@ html, body, #root {
 
 .eco-suggestion {
   border-bottom: 1px solid var(--vscode-panel-border, var(--vscode-widget-border));
+  animation: eco-fade-up 280ms var(--eco-ease-emphasis);
 }
 
 .eco-suggestion-header {
@@ -273,7 +301,7 @@ html, body, #root {
   color: var(--vscode-foreground);
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
-  transition: background 150ms ease;
+  transition: background 170ms var(--eco-ease-standard);
 }
 
 .eco-suggestion-header:hover {
@@ -283,6 +311,27 @@ html, body, #root {
 .eco-suggestion-body {
   padding: 8px 12px 12px 12px;
   border-top: 1px solid var(--vscode-panel-border, var(--vscode-widget-border));
+  animation: eco-reveal 220ms var(--eco-ease-emphasis);
+  transform-origin: top;
+}
+
+.eco-disclosure {
+  width: 0;
+  height: 0;
+  margin-top: 5px;
+  flex-shrink: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid var(--vscode-descriptionForeground);
+  opacity: 0.9;
+  transform: translateY(1px) rotate(0deg);
+  transform-origin: 2px 4px;
+  transition: transform 180ms var(--eco-ease-standard), opacity 180ms var(--eco-ease-standard);
+}
+
+.eco-disclosure.open {
+  transform: translateY(1px) rotate(90deg);
+  opacity: 1;
 }
 
 /* ─── Endpoint row ─── */
@@ -293,11 +342,13 @@ html, body, #root {
   gap: 8px;
   padding: 5px 12px;
   font-size: 11px;
-  transition: background 150ms ease;
+  transition: background 170ms var(--eco-ease-standard), transform 170ms var(--eco-ease-standard);
+  animation: eco-fade-up 220ms var(--eco-ease-emphasis);
 }
 
 .eco-endpoint-row:hover {
   background: var(--vscode-list-hoverBackground);
+  transform: translateX(1px);
 }
 
 /* ─── Section header (collapsible) ─── */
@@ -319,7 +370,7 @@ html, body, #root {
   color: var(--vscode-descriptionForeground);
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  transition: background 150ms ease;
+  transition: background 170ms var(--eco-ease-standard);
 }
 
 .eco-section-header:hover {
@@ -355,4 +406,58 @@ html, body, #root {
 @keyframes eco-thinking-dot {
   0%, 20%, 100% { opacity: 0.15; }
   50% { opacity: 1; }
+}
+
+.eco-panel-view {
+  animation: eco-panel-in 200ms var(--eco-ease-emphasis);
+}
+
+@keyframes eco-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes eco-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-3px) scaleY(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+@keyframes eco-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eco-tab,
+  .eco-tab::after,
+  .eco-btn-icon,
+  .eco-suggestion,
+  .eco-suggestion-header,
+  .eco-suggestion-body,
+  .eco-disclosure,
+  .eco-endpoint-row,
+  .eco-section-header,
+  .eco-panel-view {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
 }

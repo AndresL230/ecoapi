@@ -555,6 +555,8 @@ export class EcoSidebarProvider implements vscode.WebviewViewProvider {
         editBuilder.insert(position, textToInsert);
       });
 
+      await doc.save();
+
       editor.selection = new vscode.Selection(position, position);
       editor.revealRange(new vscode.Range(position, position));
     } catch (err: unknown) {
