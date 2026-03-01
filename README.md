@@ -151,7 +151,7 @@ The `extension/` folder contains a VSCode extension that runs ECO analysis direc
 
 ### Running in development (F5)
 
-1. Open `extension/` as your workspace in VSCode:
+1. Open the **`extension/`** folder as your workspace in VSCode:
    ```bash
    code extension/
    ```
@@ -160,11 +160,11 @@ The `extension/` folder contains a VSCode extension that runs ECO analysis direc
    npm install
    cd webview && npm install && cd ..
    ```
-3. Build the embedded dashboard (one-time, or after dashboard changes):
+3. Build the extension (dashboard + webview + extension backend):
    ```bash
-   npm run build:dashboard
+   npm run build
    ```
-4. Press **F5** — builds the extension and webview, then launches an Extension Development Host window.
+4. Press **F5** inside the `extension/` workspace — this runs the build and launches an **Extension Development Host** window.
 5. Click the **ECO leaf icon** in the Activity Bar to open the sidebar.
 
 ### Running from the .vsix
