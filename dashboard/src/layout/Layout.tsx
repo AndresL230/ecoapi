@@ -60,7 +60,7 @@ export function Layout() {
                     className={twMerge(
                       "flex items-center justify-center w-[52px] h-[52px] rounded-lg transition-all duration-200 group relative",
                       isActive
-                        ? "bg-white/[0.1] text-[#4EAA57]"
+                        ? "text-[#4EAA57]"
                         : "hover:bg-white/[0.06]"
                     )}
                     style={{ color: isActive ? '#4EAA57' : 'rgba(255,255,255,0.4)' }}
