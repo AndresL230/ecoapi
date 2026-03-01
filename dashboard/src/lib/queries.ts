@@ -11,6 +11,7 @@ import type {
   GraphData,
   CostSummary,
   ProviderCost,
+  SustainabilityData,
   PaginationMeta,
 } from "./types";
 
@@ -155,6 +156,16 @@ export function useSuggestions(
         `/projects/${projectId}/suggestions`,
         params as Record<string, string | number | undefined>,
       ),
+    enabled: !!projectId,
+  });
+}
+
+// ── Sustainability ──
+
+export function useSustainability(projectId: string | undefined) {
+  return useQuery({
+    queryKey: ["sustainability", projectId],
+    queryFn: () => get<{ data: SustainabilityData }>(`/projects/${projectId}/sustainability`),
     enabled: !!projectId,
   });
 }
